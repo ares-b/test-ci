@@ -59,9 +59,6 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Install GitHub CLI
-      uses: actions/setup-gh-cli@v2
-
     - name: Create Pull Request
       run: |
         VERSION=$(echo "${{ steps.version.outputs.version }}")
