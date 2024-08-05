@@ -34,13 +34,25 @@ jobs:
         minor_pattern: "(MINOR)"
         version_format: "${major}.${minor}.${patch}"
     
-    - name: Create Release PR
-      id: create_pr
-      uses: peter-evans/create-pull-request@v6
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: "Release version ${{ steps.version.outputs.version }}"
-        branch: "release-${{ steps.version.outputs.version }}"
-        title: "Release version ${{ steps.version.outputs.version }}"
-        body: "Automated release of version ${{ steps.version.outputs.version }}"
+    - name: Create Release Branch and Commit
+      run: |
+        VERSION=$(echo "${{ steps.version.outputs.version }}")
+        BRANCH="release-${VERSION}"
+        git checkout -b ${BRANCH}
+        echo "Release version ${VERSION}" > release-notes.md
+        git add release-notes.md
+        git commit -m "Release version ${VERSION}"
+        git push --set-upstream origin ${BRANCH}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create Pull Request
+      run: |
+        VERSION=$(echo "${{ steps.version.outputs.version }}")
+        gh pr create --title "Release version ${VERSION}" --body "Automated release of version ${VERSION}" --base main --head ${BRANCH}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_USER: ${{ github.actor }}
+        GITHUB_EMAIL: ${{ github.actor }}@users.noreply.github.com
     
