@@ -39,14 +39,13 @@ jobs:
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         git config --global user.name "github-actions[bot]"
 
-    - name: Create Tag
-      run: |
-        VERSION=$(echo "${{ steps.version.outputs.version }}")
-        git tag $VERSION
-        git push origin $VERSION
+    - name: Generate Changelog
+      uses: TriPSs/conventional-changelog-action@v5
+      with:
+        output_file: CHANGELOG.md
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+    
     - name: Create Release Branch and Commit
       run: |
         VERSION=$(echo "${{ steps.version.outputs.version }}")
@@ -65,5 +64,4 @@ jobs:
         gh pr create --title "Release version ${VERSION}" --body "Automated release of version ${VERSION}" --base main --head "release-${VERSION}"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
