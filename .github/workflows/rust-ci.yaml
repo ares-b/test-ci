@@ -43,6 +43,4 @@ jobs:
         branch: "release-${{ steps.version.outputs.version }}"
         title: "Release version ${{ steps.version.outputs.version }}"
         body: "Automated release of version ${{ steps.version.outputs.version }}"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
