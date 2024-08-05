@@ -24,21 +24,6 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
-    - uses: actions/checkout@v4
-    - name: Git Semantic Version
-      id: version
-      uses: paulhatch/semantic-version@v5.4.0
-      with:
-        tag_prefix: "v"
-        major_pattern: "(MAJOR)"
-        minor_pattern: "(MINOR)"
-        version_format: "${major}.${minor}.${patch}"
-    
-    - name: Configure Git
-      run: |
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git config --global user.name "github-actions[bot]"
-
     - name: Conventional Changelog Action
       uses: TriPSs/conventional-changelog-action@v5
       with:
@@ -47,8 +32,8 @@ jobs:
         git-user-name: 'github-actions[bot]'
         git-user-email: 'github-actions[bot]@users.noreply.github.com'
         tag-prefix: 'v'
-        output-file: 'CHANGELOG.md'
-        input-file: 'CHANGELOG.md'
+        output-file: './CHANGELOG.md'
+        input-file: './CHANGELOG.md'
         version-file: 'Cargo.toml'
         version-path: 'package.version'
         
