@@ -39,29 +39,16 @@ jobs:
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         git config --global user.name "github-actions[bot]"
 
-    - name: Generate Changelog
-      uses: TriPSs/conventional-changelog-action@v5
-      with:
-        output_file: CHANGELOG.md
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Create Release Branch and Commit
-      run: |
-        VERSION=$(echo "${{ steps.version.outputs.version }}")
-        BRANCH="release-${VERSION}"
-        git checkout -b ${BRANCH}
-        echo "Release version ${VERSION}" > release-notes.md
-        git add release-notes.md
-        git commit -m "Release version ${VERSION}"
-        git push --set-upstream origin ${BRANCH}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Create Pull Request
-      run: |
-        VERSION=$(echo "${{ steps.version.outputs.version }}")
-        gh pr create --title "Release version ${VERSION}" --body "Automated release of version ${VERSION}" --base main --head "release-${VERSION}"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Conventional Changelog Action
+  uses: TriPSs/conventional-changelog-action@v5
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    git-message: 'chore(release): {version}'
+    git-user-name: 'github-actions[bot]'
+    git-user-email: 'github-actions[bot]@users.noreply.github.com'
+    tag-prefix: 'v'
+    output-file: 'CHANGELOG.md'
+    input-file: 'CHANGELOG.md'
+    version-file: 'Cargo.toml'
+    version-path: 'package.version'
     
