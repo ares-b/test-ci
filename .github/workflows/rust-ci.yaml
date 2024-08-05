@@ -30,5 +30,4 @@ jobs:
         input-file: './CHANGELOG.md'
         version-file: 'Cargo.toml'
         version-path: 'package.version'
-        git-push: false
         git-branch: 'release-{version}'
