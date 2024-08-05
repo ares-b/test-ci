@@ -34,6 +34,19 @@ jobs:
         minor_pattern: "(MINOR)"
         version_format: "${major}.${minor}.${patch}"
     
+    - name: Configure Git
+      run: |
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions[bot]"
+
+    - name: Create Tag
+      run: |
+        VERSION=$(echo "${{ steps.version.outputs.version }}")
+        git tag $VERSION
+        git push origin $VERSION
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Create Release Branch and Commit
       run: |
         VERSION=$(echo "${{ steps.version.outputs.version }}")
@@ -46,13 +59,14 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Install GitHub CLI
+      uses: actions/setup-gh-cli@v2
+
     - name: Create Pull Request
       run: |
         VERSION=$(echo "${{ steps.version.outputs.version }}")
-        gh pr create --title "Release version ${VERSION}" --body "Automated release of version ${VERSION}" --base main --head ${BRANCH}
+        gh pr create --title "Release version ${VERSION}" --body "Automated release of version ${VERSION}" --base main --head "release-${VERSION}"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        GITHUB_USER: ${{ github.actor }}
-        GITHUB_EMAIL: ${{ github.actor }}@users.noreply.github.com
     
