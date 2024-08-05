@@ -39,15 +39,14 @@ jobs:
         major_pattern: "(MAJOR)"
         minor_pattern: "(MINOR)"
         version_format: "${major}.${minor}.${patch}"
+    
     - name: Create Release PR
       id: create_pr
-      run: |
-        VERSION=$(echo "${{ steps.version.outputs.version }}")
-        BRANCH="release-${VERSION}"
-        git checkout -b ${BRANCH}
-        git commit --allow-empty -m "Release version ${VERSION}"
-        git push --set-upstream origin ${BRANCH}
-        gh pr create --title "Release version ${VERSION}" --body "Release for version ${VERSION}" --base main --head ${BRANCH}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "Release version ${{ steps.version.outputs.version }}"
+        branch: "release-${{ steps.version.outputs.version }}"
+        title: "Release version ${{ steps.version.outputs.version }}"
+        body: "Automated release of version ${{ steps.version.outputs.version }}"
     
