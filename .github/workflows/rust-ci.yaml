@@ -18,6 +18,36 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Check Style
+      run: cargo clippy --verbose -- -D warnings 
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
+    - uses: actions/checkout@v4
+    - name: Git Semantic Version
+      id: version
+      uses: paulhatch/semantic-version@v5.4.0
+      with:
+        tag_prefix: "v"
+        major_pattern: "(MAJOR)"
+        minor_pattern: "(MINOR)"
+        version_format: "${major}.${minor}.${patch}"
+    
+    - name: Configure Git
+      run: |
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions[bot]"
+    
+    - name: Create Release Branch 
+      run: |
+        VERSION=$(echo "${{ steps.version.outputs.version }}")
+        BRANCH="release-${VERSION}"
+        git checkout -b ${BRANCH}
+        git push --set-upstream origin ${BRANCH}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Conventional Changelog Action
       uses: TriPSs/conventional-changelog-action@v5
       with:
@@ -30,4 +60,17 @@ jobs:
         input-file: './CHANGELOG.md'
         version-file: 'Cargo.toml'
         version-path: 'package.version'
-        git-branch: 'release-{version}'
+        git-branch: 'release-{{ steps.version.outputs.version }}'
+        skip-tag: true
+
+    - name: Create Pull Request
+      run: |
+        VERSION=$(echo "${{ steps.version.outputs.version }}")
+        BRANCH="release-${VERSION}"
+        git push --set-upstream origin ${BRANCH}
+        git checkout -b ${BRANCH}
+        VERSION=$(echo "${{ steps.version.outputs.version }}")
+        gh pr create --title "Release version ${VERSION}" --body "Automated release of version ${VERSION}" --base main --head "release-${VERSION}"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
