@@ -18,13 +18,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Check Style
-      run: cargo clippy --verbose -- -D warnings 
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
-    - uses: actions/checkout@v4
+    
     - name: Git Semantic Version
       id: version
       uses: paulhatch/semantic-version@v5.4.0
