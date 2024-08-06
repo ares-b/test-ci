@@ -39,6 +39,8 @@ jobs:
         VERSION=$(echo "${{ steps.cliff.outputs.version }}")
         BRANCH="release-${VERSION}"
         git checkout -b ${BRANCH}
+        git add CHANGELOG.md
+        git commit -m "chore(ci): release v${VERSION}"
         git push --set-upstream origin ${BRANCH}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -47,9 +49,7 @@ jobs:
       run: |
         VERSION=$(echo "${{ steps.cliff.outputs.version }}")
         BRANCH="release-${VERSION}"
-        git push --set-upstream origin ${BRANCH}
         git checkout ${BRANCH}
-        VERSION=$(echo "${{ steps.version.outputs.version }}")
         gh pr create --title "Release version ${VERSION}" --body "Automated release of version ${VERSION}" --base main --head "release-${VERSION}"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
