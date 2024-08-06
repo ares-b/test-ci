@@ -60,7 +60,7 @@ jobs:
         input-file: './CHANGELOG.md'
         version-file: 'Cargo.toml'
         version-path: 'package.version'
-        git-branch: 'release-{{ steps.version.outputs.version }}'
+        git-branch: 'release-${{ steps.version.outputs.version }}'
         skip-tag: true
 
     - name: Create Pull Request
