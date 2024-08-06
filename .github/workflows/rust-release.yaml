@@ -1,0 +1,49 @@
+name: Rust Release Pipeline
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+jobs:
+  rust-release:
+    if: |
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'release-v') &&
+      contains(github.event.pull_request.head.ref, '.')
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+      
+    - name: Set up Git
+      run: |
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions[bot]"
+
+    - name: Extract version number
+      id: extract_version
+      run: |
+        echo "BRANCH_REF=${GITHUB_HEAD_REF}" >> $GITHUB_ENV
+        VERSION=$(echo ${GITHUB_HEAD_REF} | sed 's/release-v\([0-9]*\.[0-9]*\.[0-9]*\)/\1/')
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: Create tag
+      env:
+        VERSION: ${{ env.VERSION }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        git tag -a "v${VERSION}" -m "Release ${VERSION}"
+        git push origin "v${VERSION}"
+
+    - name: Create GitHub Release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        VERSION: ${{ env.VERSION }}
+        NOTES: ${{ env.NOTES }}
+      run: |
+        NOTES=$(sed -n '/## \['${VERSION}'\]/,/## \[/p' CHANGELOG.md | sed '$d' | sed '1d')
+        gh release create "v${VERSION}" --title "v${VERSION}" --notes "${NOTES}"
