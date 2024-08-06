@@ -19,14 +19,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Git Semantic Version
-      id: version
-      uses: paulhatch/semantic-version@v5.4.0
-      with:
-        tag_prefix: "v"
-        major_pattern: "(MAJOR)"
-        minor_pattern: "(MINOR)"
-        version_format: "${major}.${minor}.${patch}"
+    - name: Generate a changelog
+      id: cliff
+      uses: orhun/git-cliff-action@v3
+      env:
+        OUTPUT: CHANGELOG.md
+        GITHUB_REPO: ${{ github.repository }}
     
     - name: Configure Git
       run: |
@@ -35,28 +33,13 @@ jobs:
     
     - name: Create Release Branch 
       run: |
-        VERSION=$(echo "${{ steps.version.outputs.version }}")
+        VERSION=$(echo "${{ steps.cliff.outputs.version }}")
         BRANCH="release-${VERSION}"
         git checkout -b ${BRANCH}
         git push --set-upstream origin ${BRANCH}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Conventional Changelog Action
-      uses: TriPSs/conventional-changelog-action@v5
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        git-message: 'chore(release): {version}'
-        git-user-name: 'github-actions[bot]'
-        git-user-email: 'github-actions[bot]@users.noreply.github.com'
-        tag-prefix: 'v'
-        output-file: './CHANGELOG.md'
-        input-file: './CHANGELOG.md'
-        version-file: 'Cargo.toml'
-        version-path: 'package.version'
-        git-branch: 'release-${{ steps.version.outputs.version }}'
-        skip-tag: true
-
+  
     - name: Create Pull Request
       run: |
         VERSION=$(echo "${{ steps.version.outputs.version }}")
