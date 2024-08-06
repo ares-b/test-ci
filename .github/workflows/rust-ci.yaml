@@ -62,7 +62,7 @@ jobs:
         VERSION=$(echo "${{ steps.version.outputs.version }}")
         BRANCH="release-${VERSION}"
         git push --set-upstream origin ${BRANCH}
-        git checkout -b ${BRANCH}
+        git checkout ${BRANCH}
         VERSION=$(echo "${{ steps.version.outputs.version }}")
         gh pr create --title "Release version ${VERSION}" --body "Automated release of version ${VERSION}" --base main --head "release-${VERSION}"
       env:
