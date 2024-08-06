@@ -1,0 +1,31 @@
+name: Rust Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+    paths-ignore:
+      - 'infrastructure/**'
+      - '.github/workflows/infrastructure-cicd.yml'
+      - 'DockerFile'
+
+jobs:
+  rust-release-build:
+    if: |
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'release-v') &&
+      contains(github.event.pull_request.head.ref, '.')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Use Rust Release and Build action
+        uses: ./.github/actions/rust_release
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          changelog_path: 'CHANGELOG.md'
+          release_prefix: 'release-'
+          targets: '["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]'
+          packages: '["test-ci", "another-package"]'
+          pre_release: 'true'
