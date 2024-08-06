@@ -1,0 +1,70 @@
+name: Rust CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'infrastructure/**'
+      - '.github/workflows/infrastructure-cicd.yml'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Git Semantic Version
+      id: version
+      uses: paulhatch/semantic-version@v5.4.0
+      with:
+        tag_prefix: "v"
+        major_pattern: "(MAJOR)"
+        minor_pattern: "(MINOR)"
+        version_format: "${major}.${minor}.${patch}"
+    
+    - name: Configure Git
+      run: |
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions[bot]"
+    
+    - name: Create Release Branch 
+      run: |
+        VERSION=$(echo "${{ steps.version.outputs.version }}")
+        BRANCH="release-${VERSION}"
+        git checkout -b ${BRANCH}
+        git push --set-upstream origin ${BRANCH}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Conventional Changelog Action
+      uses: TriPSs/conventional-changelog-action@v5
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        git-message: 'chore(release): {version}'
+        git-user-name: 'github-actions[bot]'
+        git-user-email: 'github-actions[bot]@users.noreply.github.com'
+        tag-prefix: 'v'
+        output-file: './CHANGELOG.md'
+        input-file: './CHANGELOG.md'
+        version-file: 'Cargo.toml'
+        version-path: 'package.version'
+        git-branch: 'release-${{ steps.version.outputs.version }}'
+        skip-tag: true
+
+    - name: Create Pull Request
+      run: |
+        VERSION=$(echo "${{ steps.version.outputs.version }}")
+        BRANCH="release-${VERSION}"
+        git push --set-upstream origin ${BRANCH}
+        git checkout ${BRANCH}
+        VERSION=$(echo "${{ steps.version.outputs.version }}")
+        gh pr create --title "Release version ${VERSION}" --body "Automated release of version ${VERSION}" --base main --head "release-${VERSION}"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
