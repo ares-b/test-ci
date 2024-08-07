@@ -1,0 +1,41 @@
+[package]
+name = "test-ci"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+
+[package.metadata.git-cliff.changelog]
+header = "# Changelog"
+body = """
+{%- macro remote_url() -%}
+  https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}
+{%- endmacro -%}
+
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | striptags | trim | upper_first }}
+    {% for commit in commits | filter(attribute="merge_commit", value=false) %}
+        - {{ commit.message | upper_first }} ([{{ commit.id | truncate(length=7, end="") }}]({{ self::remote_url() }}/commit/{{ commit.id }}))
+    {% endfor %}
+{% endfor %}
+"""
+trim = true
+[package.metadata.git-cliff.git]
+conventional_commits = true
+commit_parsers = [
+    { message = "^feat*", group = "<!-- 0 -->:rocket: Features" },
+    { message = "^fix*", group = "<!-- 1 -->:zap: Fixes" },
+    { message = "^refactor", group = "<!-- 2 -->:bug: Refactor" },
+    { message = "^perf*", group = "<!-- 3 -->:zap: Performance" },
+    { message = "^chore*", group = "<!-- 4 -->:zap: Miscellaneous" },
+    { message = "^chore\\(release\\): release version", skip = true },
+]
+[package.metadata.git-cliff.bump]
+features_always_bump_minor = true
+breaking_always_bump_major = true
+initial_tag = "v0.1.0"
