@@ -1,0 +1,118 @@
+name: 'Rust Release and Build'
+description: 'Reusable action for Rust release and build process'
+inputs:
+  github_token:
+    description: 'GitHub token'
+    required: true
+  changelog_path:
+    description: 'Path to the changelog file'
+    default: 'CHANGELOG.md'
+    required: false
+  release_prefix:
+    description: 'Prefix for release branches'
+    default: 'release-'
+    required: false
+  targets:
+    description: 'JSON string of Rust build targets'
+    required: true
+  packages:
+    description: 'JSON string of Rust packages to build'
+    required: true
+  pre_release:
+    description: 'Indicates if the release is a pre-release'
+    required: false
+    default: 'false'
+outputs:
+  version:
+    description: 'Extracted version number from the branch name'
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Git
+      run: |
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions[bot]"
+      shell: bash
+
+    - name: Generate a changelog
+      id: cliff
+      uses: orhun/git-cliff-action@v3
+      with:
+        config: Cargo.toml
+        args: --bump --github-repo ${{ github.repository }}
+      env:
+        OUTPUT: CHANGELOG.md
+        GITHUB_REPO: ${{ github.repository }}
+
+    - name: Create Release Branch 
+      run: |
+        VERSION=$(echo "${{ steps.cliff.outputs.version }}")
+        BRANCH="release-${VERSION}"
+        git checkout -b ${BRANCH}
+        git add CHANGELOG.md
+        git commit -m "chore(release): release ${VERSION}"
+        git push --set-upstream origin ${BRANCH}
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+
+    - name: Create Pull Request
+      run: |
+        VERSION=$(echo "${{ steps.cliff.outputs.version }}")
+        NOTES=$(sed -n '/## \['${VERSION:1}'\]/,/## \[/p' CHANGELOG.md | sed '$d' | sed '1d')
+        BRANCH="release-${VERSION}"
+        gh pr create --title "Release version ${VERSION}" --body "${NOTES}" --base main --head "release-${VERSION}"
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+
+    - name: Check for existing release
+      id: check_release
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: |
+        RELEASE_ID=$(gh release view "${{ steps.cliff.outputs.version }}" --json id -q .id || echo "")
+        echo "RELEASE_ID=$RELEASE_ID" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Create or update release
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GH_TOKEN: ${{ inputs.github_token }}
+      run: |
+        NOTES=$(sed -n '/## \['${{ steps.cliff.outputs.version }}'\]/,/## \[/p' ${{ inputs.changelog_path }} | sed '$d' | sed '1d')
+        if [ -z "${{ env.RELEASE_ID }}" ]; then
+          # Create new release
+          if [ "${{ inputs.pre_release }}" == "true" ]; then
+            gh release create "${{ steps.cliff.outputs.version }}" --title "${{ steps.cliff.outputs.version }}" --notes "${NOTES}" --prerelease
+          else
+            gh release create "${{ steps.cliff.outputs.version }}" --title "${{ steps.cliff.outputs.version }}" --notes "${NOTES}"
+            git push origin -d "release-${{ steps.cliff.outputs.version }}"
+          fi
+        else
+          # Update existing release
+          if [ "${{ inputs.pre_release }}" == "true" ]; then
+            gh release edit "${{ steps.cliff.outputs.version }}" --notes "${NOTES}" --prerelease
+          else
+            gh release edit "${{ steps.cliff.outputs.version }}" --notes "${NOTES}"
+            git push origin -d "release-${{ steps.cliff.outputs.version }}"
+          fi
+        fi
+      shell: bash
+
+    - name: Process targets and packages
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GH_TOKEN: ${{ inputs.github_token }}
+      run: |
+        targets=$(echo '${{ inputs.targets }}' | jq -r '.[]')
+        packages=$(echo '${{ inputs.packages }}' | jq -r '.[]')
+        for target in $targets; do
+          rustup target add $target
+          for package in $packages; do
+            cargo build --release --target $target --package $package
+            mv target/$target/release/$package "${package}_${target}_${{ steps.cliff.outputs.version }}"
+            gh release upload "${{ steps.cliff.outputs.version }}" "${package}_${target}_${{ steps.cliff.outputs.version }}" --clobber
+          done
+        done
+      shell: bash
