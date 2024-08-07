@@ -1,0 +1,47 @@
+name: Rust Prepare Release
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+    paths-ignore:
+      - 'infrastructure/**'
+      - '.github/workflows/infrastructure-cicd.yml'
+      - 'CHANGELOG.md'
+      - 'DockerFile'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-prepare-release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Rust CI
+      uses: ./.github/actions/rust_ci
+
+    - name: Set Pre-Release Flag
+      id: set_pre_release
+      run: |
+        if [[ "${{ github.event.pull_request.head.ref }}" == release-* ]]; then
+          echo "::set-output name=pre_release::false"
+        else
+          echo "::set-output name=pre_release::true"
+        fi
+
+    - name: Rust Release
+      uses: ./.github/actions/rust_release
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        changelog_path: 'CHANGELOG.md'
+        release_prefix: 'release-'
+        targets: '["x86_64-unknown-linux-gnu"]'
+        packages: '["test-ci"]'
+        pre_release: ${{ steps.set_pre_release.outputs.pre_release }}
