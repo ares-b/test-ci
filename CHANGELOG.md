@@ -1,4 +1,10 @@
 # Changelog
+## [0.1.1] - 2024-08-07
+
+### :zap: Miscellaneous
+
+- Release v0.1.0 ([f19dfcf](https://github.com/ares-b/test-ci/commit/f19dfcf35a4af7f43a26e41c9d061b0f6ea8374a))
+
 ## [0.1.0] - 2024-08-07
 
 ### :rocket: Features
