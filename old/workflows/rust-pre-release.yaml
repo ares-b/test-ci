@@ -1,0 +1,60 @@
+name: Rust Prepare Release
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'infrastructure/**'
+      - '.github/workflows/infrastructure-cicd.yml'
+      - 'CHANGELOG.md'
+      - 'DockerFile'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-prepare-release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Generate a changelog
+      id: cliff
+      uses: orhun/git-cliff-action@v3
+      with:
+        config: Cargo.toml
+        args: --bump --github-repo ${{ github.repository }}
+      env:
+        OUTPUT: CHANGELOG.md
+        GITHUB_REPO: ${{ github.repository }}
+    
+    - name: Configure Git
+      run: |
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions[bot]"
+    
+    - name: Create Release Branch 
+      run: |
+        VERSION=$(echo "${{ steps.cliff.outputs.version }}")
+        BRANCH="release-${VERSION}"
+        git checkout -b ${BRANCH}
+        git add CHANGELOG.md
+        git commit -m "chore(ci): release ${VERSION}"
+        git push --set-upstream origin ${BRANCH}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+    - name: Create Pull Request
+      run: |
+        VERSION=$(echo "${{ steps.cliff.outputs.version }}")
+        NOTES=$(sed -n '/## \['${VERSION:1}'\]/,/## \[/p' CHANGELOG.md | sed '$d' | sed '1d')
+        BRANCH="release-${VERSION}"
+        git checkout ${BRANCH}
+        gh pr create --title "Release version ${VERSION}" --body "${NOTES}" --base main --head "release-${VERSION}"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
