@@ -1,0 +1,46 @@
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+    paths-ignore:
+      - 'infrastructure/**'
+      - '.github/workflows/infrastructure-cicd.yml'
+      - 'CHANGELOG.md'
+      - 'DockerFile'
+
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-pre-release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Rust Release
+      uses: ./.github/actions/rust_release
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        changelog_path: 'CHANGELOG.md'
+        release_prefix: 'release-'
+        targets: '["x86_64-unknown-linux-gnu"]'
+        packages: '["test-ci"]'
+        pre_release: 'true'
+      if: github.event.pull_request.merged == true && !startsWith(github.event.pull_request.head.ref, 'release')
+
+    - name: Rust Release
+      uses: ./.github/actions/rust_release
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        changelog_path: 'CHANGELOG.md'
+        release_prefix: 'release-'
+        targets: '["x86_64-unknown-linux-gnu"]'
+        packages: '["test-ci"]'
+        pre_release: 'false'
+      if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release')
