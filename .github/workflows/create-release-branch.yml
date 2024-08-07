@@ -1,0 +1,37 @@
+# .github/workflows/create-release-branch.yml
+name: Create Release Branch
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+jobs:
+  create_release_branch:
+    if: github.event.pull_request.merged == true && !startsWith(github.event.pull_request.head.ref, 'release-')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v2
+
+      - name: Set up Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create release branch
+        run: |
+          NEW_RELEASE_BRANCH="release-$(date +'%Y%m%d%H%M%S')"
+          git checkout -b $NEW_RELEASE_BRANCH
+          git push origin $NEW_RELEASE_BRANCH
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: main
+          head: $NEW_RELEASE_BRANCH
+          title: 'Release Branch: $NEW_RELEASE_BRANCH'
+          body: 'This is the release branch created from main.'

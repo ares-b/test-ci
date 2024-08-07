@@ -1,0 +1,33 @@
+# .github/workflows/update-pre-release.yml
+name: Update Pre-release
+
+on:
+  push:
+    branches:
+      - release-*
+
+jobs:
+  update_pre_release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v2
+
+      - name: Install git-cliff
+        run: cargo install git-cliff
+
+      - name: Generate changelog
+        run: git cliff --output CHANGELOG.md
+
+      - name: Update pre-release
+        id: update_pre_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: CHANGELOG.md
+          draft: false
+          prerelease: true
+          tag_name: v${{ github.sha }}
+          name: "Updated Pre-release ${{ github.sha }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
