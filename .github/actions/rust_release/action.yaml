@@ -1,0 +1,86 @@
+name: 'Rust Release and Build'
+description: 'Reusable action for Rust release and build process'
+inputs:
+  github_token:
+    description: 'GitHub token'
+    required: true
+  changelog_path:
+    description: 'Path to the changelog file'
+    default: 'CHANGELOG.md'
+    required: false
+  release_prefix:
+    description: 'Prefix for release branches'
+    default: 'release-'
+    required: false
+  targets:
+    description: 'JSON string of Rust build targets'
+    required: true
+  packages:
+    description: 'JSON string of Rust packages to build'
+    required: true
+  pre_release:
+    description: 'Indicates if the release is a pre-release'
+    required: false
+    default: 'false'
+outputs:
+  version:
+    description: 'Extracted version number from the branch name'
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Git
+      run: |
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions[bot]"
+      shell: bash
+
+    - name: Check for existing pre-release
+      id: check_pre_release
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: |
+        PRE_RELEASE_TAG=$(gh release list --json tagName,isPrerelease --jq '.[] | select(.isPrerelease==true) | .tagName' || echo "")
+        echo "PRE_RELEASE_TAG=$PRE_RELEASE_TAG" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Delete pre-release
+      if: ${{ env.PRE_RELEASE_TAG }}
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GH_TOKEN: ${{ inputs.github_token }}
+      run: |
+        gh release delete ${{ env.PRE_RELEASE_TAG }} --yes
+      shell: bash
+
+    - name: Create or update release
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GH_TOKEN: ${{ inputs.github_token }}
+      run: |
+        NOTES=""
+        if [ -f ${{ inputs.changelog_path }} ]; then
+          NOTES=$(sed -n '/## \['${{ steps.cliff.outputs.version }}'\]/,/## \[/p' ${{ inputs.changelog_path }} | sed '$d' | sed '1d')
+        fi
+        if [ "${{ inputs.pre_release }}" == "true" ]; then
+          gh release create "${{ steps.cliff.outputs.version }}" --title "${{ steps.cliff.outputs.version }}" --notes "${NOTES}" --prerelease
+        else
+          gh release create "${{ steps.cliff.outputs.version }}" --title "${{ steps.cliff.outputs.version }}" --notes "${NOTES}"
+        fi
+      shell: bash
+
+    - name: Process targets and packages
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GH_TOKEN: ${{ inputs.github_token }}
+      run: |
+        targets=$(echo '${{ inputs.targets }}' | jq -r '.[]')
+        packages=$(echo '${{ inputs.packages }}' | jq -r '.[]')
+        for target in $targets; do
+          rustup target add $target
+          for package in $packages; do
+            cargo build --release --target $target --package $package
+            mv target/$target/release/$package "${package}_${target}_${{ steps.cliff.outputs.version }}"
+            gh release upload "${{ steps.cliff.outputs.version }}" "${package}_${target}_${{ steps.cliff.outputs.version }}" --clobber
+          done
+        done
+      shell: bash
