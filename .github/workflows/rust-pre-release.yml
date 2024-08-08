@@ -1,0 +1,124 @@
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+    paths-ignore:
+      - 'infrastructure/**'
+      - '.github/workflows/infrastructure-cicd.yml'
+      - 'DockerFile'
+
+  push:
+    branches:
+      - release-next
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-pre-release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Rust Pre-Release
+      uses: ./.github/actions/rust_release
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        targets: '["x86_64-unknown-linux-gnu"]'
+        packages: '["test-ci"]'
+        pre_release: 'true'
+        action: 'pre-release'
+      if: github.event.pull_request.merged == true && !startsWith(github.event.pull_request.head.ref, 'release-next')
+
+  rust-release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Rust Release
+      uses: ./.github/actions/rust_release
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        changelog_path: 'CHANGELOG.md'
+        release_prefix: 'release-'
+        targets: '["x86_64-unknown-linux-gnu"]'
+        packages: '["test-ci"]'
+        pre_release: 'false'
+        action: 'release'
+      if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release-next')
+
+    - name: Push Updated Release Commit
+      run: |
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions[bot]"
+        git commit --amend -m "chore(release): release ${{ steps.rust_release.outputs.version }}"
+        git push --force-with-lease
+      if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release-next')
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-pre-release:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/release-next'
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Clean up chore(release) Commits
+      uses: ./.github/actions/rust_release
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        action: 'cleanup'
+
+    - name: Generate Changelog and Version
+      id: cliff
+      uses: orhun/git-cliff-action@v3
+      with:
+        config: Cargo.toml
+        args: --bump --github-repo ${{ github.repository }}
+      env:
+        OUTPUT: CHANGELOG.md
+        GITHUB_REPO: ${{ github.repository }}
+
+    - name: Extract version from changelog
+      id: extract_version
+      run: |
+        VERSION=$(grep -oP '(?<=## \[)\d+\.\d+\.\d+' CHANGELOG.md | head -n 1)
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Update Release Commit and Pull Request
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        VERSION: ${{ env.VERSION }}
+      run: |
+        # Create the new chore(release) commit with updated changelog
+        git add CHANGELOG.md
+        git commit -m "chore(release): release ${VERSION}"
+        git push --force-with-lease
+
+        # Get the pull request number associated with the release-next branch
+        PR_NUMBER=$(gh pr list --head release-next --json number --jq '.[0].number')
+
+        # Update the pull request body with the new notes
+        NOTES=$(sed -n '/## \['${VERSION}'\]/,/## \[/p' CHANGELOG.md | sed '$d' | sed '1d')
+        gh pr edit ${PR_NUMBER} --body "${NOTES}"
+
+        # Delete the existing pre-release if it exists
+        if [ -n "${{ env.PRE_RELEASE_TAG }}" ]; then
+          gh release delete ${{ env.PRE_RELEASE_TAG }} --yes
+        fi
+
+        # Create a new pre-release with the updated version and changelog
+        gh release create "${VERSION}" --title "${VERSION}" --notes "${NOTES}" --prerelease
