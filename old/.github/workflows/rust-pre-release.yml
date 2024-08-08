@@ -1,0 +1,70 @@
+on:
+  pull_request:
+    branches:
+      - release-next
+    types:
+      - closed
+
+  push:
+    branches:
+      - release-next
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-pre-release:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/release-next'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rust Release
+        uses: ./.github/actions/rust_release
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          changelog_path: 'CHANGELOG.md'
+          release_prefix: 'release-'
+          targets: '["x86_64-unknown-linux-gnu"]'
+          packages: '["test-ci"]'
+          pre_release: 'true'
+          branch_name: 'release-next'
+
+  rust-release:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rust Release
+        uses: ./.github/actions/rust_release
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          changelog_path: 'CHANGELOG.md'
+          release_prefix: 'release-'
+          targets: '["x86_64-unknown-linux-gnu"]'
+          packages: '["test-ci"]'
+          pre_release: 'false'
+          branch_name: 'main'
+
+  update-release-pr:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update release PR
+        run: |
+          gh pr close $(gh pr list --base main --head release-next --json number --jq '.[0].number')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

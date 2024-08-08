@@ -1,0 +1,113 @@
+name: 'Rust Release and Build'
+description: 'Reusable action for Rust release and build process'
+inputs:
+  github_token:
+    description: 'GitHub token'
+    required: true
+  changelog_path:
+    description: 'Path to the changelog file'
+    default: 'CHANGELOG.md'
+    required: false
+  release_prefix:
+    description: 'Prefix for release branches'
+    default: 'release-'
+    required: false
+  targets:
+    description: 'JSON string of Rust build targets'
+    required: true
+  packages:
+    description: 'JSON string of Rust packages to build'
+    required: true
+  pre_release:
+    description: 'Indicates if the release is a pre-release'
+    required: false
+    default: 'false'
+  branch_name:
+    description: 'Name of the branch'
+    required: true
+outputs:
+  version:
+    description: 'Extracted version number from the branch name'
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Git
+      run: |
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions[bot]"
+      shell: bash
+
+    - name: Generate a changelog
+      id: cliff
+      uses: orhun/git-cliff-action@v3
+      with:
+        config: Cargo.toml
+        args: --bump --github-repo ${{ github.repository }}
+      env:
+        OUTPUT: ${{ inputs.changelog_path }}
+        GITHUB_REPO: ${{ github.repository }}
+      
+    - name: Check for existing pre-release
+      id: check_pre_release
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: |
+        PRE_RELEASE_TAG=$(gh release list --json tagName,isPrerelease --jq '.[] | select(.isPrerelease==true) | .tagName' || echo "")
+        echo "PRE_RELEASE_TAG=$PRE_RELEASE_TAG" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Delete pre-release
+      if: ${{ inputs.pre_release == 'true' }}
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GH_TOKEN: ${{ inputs.github_token }}
+      run: |
+        if [ -n "${{ env.PRE_RELEASE_TAG }}" ]; then
+          gh release delete ${{ env.PRE_RELEASE_TAG }}
+        fi
+      shell: bash
+
+    - name: Create or update release
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GH_TOKEN: ${{ inputs.github_token }}
+      run: |
+        NOTES=$(sed -n '/## \['${{ steps.cliff.outputs.version }}'\]/,/## \[/p' ${{ inputs.changelog_path }} | sed '$d' | sed '1d')
+        if [ "${{ inputs.pre_release }}" == "true" ]; then
+          gh release create "${{ steps.cliff.outputs.version }}" --title "${{ steps.cliff.outputs.version }}" --notes "${NOTES}" --prerelease
+        else
+          gh release create "${{ steps.cliff.outputs.version }}" --title "${{ steps.cliff.outputs.version }}" --notes "${NOTES}"
+          git push origin -d ${{ inputs.branch_name }}
+        fi
+      shell: bash
+
+    - name: Process targets and packages
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GH_TOKEN: ${{ inputs.github_token }}
+      run: |
+        targets=$(echo '${{ inputs.targets }}' | jq -r '.[]')
+        packages=$(echo '${{ inputs.packages }}' | jq -r '.[]')
+        for target in $targets; do
+          rustup target add $target
+          for package in $packages; do
+            cargo build --release --target $target --package $package
+            mv target/$target/release/$package "${package}_${target}_${{ steps.cliff.outputs.version }}"
+            gh release upload "${{ steps.cliff.outputs.version }}" "${package}_${target}_${{ steps.cliff.outputs.version }}" --clobber
+          done
+        done
+      shell: bash
+
+    - name: Create or update pull request from release-next to main
+      if: ${{ inputs.pre_release == 'true' }}
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: |
+        PR_EXISTS=$(gh pr list --base main --head release-next --json number --jq '.[0].number')
+        NOTES=$(sed -n '/## \['${{ steps.cliff.outputs.version }}'\]/,/## \[/p' ${{ inputs.changelog_path }} | sed '$d' | sed '1d')
+        if [ -z "$PR_EXISTS" ]; then
+          gh pr create --title "Pre-release version ${VERSION}" --body "${NOTES}" --base main --head release-next
+        else
+          gh pr edit $PR_EXISTS --body "${NOTES}"
+        fi
+      shell: bash
