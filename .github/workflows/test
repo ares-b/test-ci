@@ -1,0 +1,20 @@
+name: Version Bump and Changelog
+
+on:
+  push:
+    branches:
+      - release-next
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Version Bump and Changelog
+        uses: ./.github/actions/versionning
+        with:
+          main_branch: 'main'
+          release_branch: 'release-next'
